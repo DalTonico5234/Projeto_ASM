@@ -1,0 +1,123 @@
+# ============================================
+# .gitignore para projetos Assembly 8086
+# (MASM / TASM / NASM / emu8086 / DOSBox)
+#
+# Obs.: o DOSBox gera arquivos com extensão em MAIÚSCULO
+# (ex.: PROG.OBJ, PROG.EXE). Em sistemas com distinção entre
+# maiúsculas e minúsculas (Linux/macOS), o Git trata *.obj e
+# *.OBJ como padrões diferentes, por isso ambos estão listados.
+# ============================================
+
+# --- Arquivos objeto e intermediários ---
+*.obj
+*.OBJ
+*.o
+*.O
+*.lst
+*.LST
+*.map
+*.MAP
+*.crf
+*.CRF
+*.sbr
+*.SBR
+*.bsc
+*.BSC
+*.ilk
+*.ILK
+*.pdb
+*.PDB
+*.res
+*.RES
+*.lib
+*.LIB
+
+# --- Executáveis (gerados pela montagem/ligação) ---
+*.exe
+*.EXE
+*.com
+*.COM
+*.bin
+*.BIN
+*.img
+*.IMG
+*.flp
+*.FLP
+
+# --- emu8086 ---
+*.binf
+*.BINF
+*.symbol
+*.SYMBOL
+*.debug
+*.DEBUG
+*.hex
+*.HEX
+emu8086.ini
+*_.asm.bak
+*.~asm
+
+# --- Debug / símbolos ---
+*.sym
+*.SYM
+*.dbg
+*.DBG
+*.td
+*.TD
+*.tr
+*.TR
+*.trs
+*.TRS
+
+# --- Backups e temporários ---
+*.bak
+*.BAK
+*.tmp
+*.TMP
+*.temp
+*.TEMP
+*.swp
+*.swo
+*~
+*.orig
+*.rej
+
+# --- DOSBox / emuladores ---
+dosbox.conf
+dosbox-*.conf
+*.sav
+*.SAV
+*.state
+*.log
+*.LOG
+
+# --- Pastas de build ---
+build/
+bin/
+obj/
+out/
+dist/
+Debug/
+Release/
+
+# --- Editores e IDEs ---
+.vscode/
+.idea/
+*.code-workspace
+*.sublime-workspace
+*.sublime-project
+.vs/
+*.suo
+*.user
+
+# --- Sistema operacional ---
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# --- Mantém o código-fonte ---
+!*.asm
+!*.ASM
+!*.inc
+!*.INC
