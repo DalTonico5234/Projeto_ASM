@@ -1,0 +1,87 @@
+# ============================================
+# .gitignore para projetos Assembly 8086
+# (MASM / TASM / NASM / emu8086 / DOSBox)
+# ============================================
+
+# --- Arquivos objeto e intermediários ---
+*.obj
+*.o
+*.lst
+*.map
+*.crf
+*.sbr
+*.bsc
+*.ilk
+*.pdb
+*.res
+*.lib
+
+# --- Executáveis (gerados pela montagem/ligação) ---
+*.exe
+*.com
+*.bin
+*.img
+*.flp
+
+# --- emu8086 ---
+*.binf
+*.symbol
+*.debug
+*.hex
+*.lst
+emu8086.ini
+*_.asm.bak
+*.~asm
+
+# --- Debug / símbolos ---
+*.sym
+*.dbg
+*.td
+*.tr
+*.trs
+
+# --- Backups e temporários ---
+*.bak
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+*.orig
+*.rej
+
+# --- DOSBox / emuladores ---
+dosbox.conf
+dosbox-*.conf
+*.sav
+*.state
+*.log
+
+# --- Pastas de build ---
+build/
+bin/
+obj/
+out/
+dist/
+Debug/
+Release/
+
+# --- Editores e IDEs ---
+.vscode/
+.idea/
+*.code-workspace
+*.sublime-workspace
+*.sublime-project
+.vs/
+*.suo
+*.user
+
+# --- Sistema operacional ---
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# --- Mantém o código-fonte ---
+# !*.asm
+# !*.inc
