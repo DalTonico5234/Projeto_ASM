@@ -17,8 +17,8 @@ extern desenha_arena, desenha_energia, desenha_rounds, desenha_tempo, escreve_mo
 extern le_teclado, tecla_nova, limpa_novas
 extern tiques, zera_tiques, espera_tique
 extern jog1, jog2, inicia_jogadores, atualiza_jogador, atualiza_lutadores, desenha_pose
-extern esquece_desenho, limita_posicoes, energia_mudou, testa_golpe, aplica_golpe
-extern encerra
+extern esquece_desenho, repinta_lutadores, apaga_lutador, limita_posicoes, energia_mudou, testa_golpe, aplica_golpe
+extern encerra, fundo_pronto, restaura_fundo, caixa_aberta
 global tela_selecao, partida, tela_gameover
 
 segment code
@@ -96,7 +96,7 @@ desenha_escolha:
 		PUSH	CX
 		PUSH	DX
 		PUSH	SI
-		MOV		AL,preto
+		MOV		AL,C_FUNDO
 		OR		DL,DL
 		JZ		de_cor
 		MOV		AL,[SI+J_COR]
@@ -136,7 +136,7 @@ de_idx:
 		MUL		BL							; AX = índice * 9 (8 letras + 0)
 		ADD		AX,nomes_cores
 		MOV		SI,AX
-		MOV		DH,19
+		MOV		DH,18
 		CALL	escreve
 		POP		SI
 		POP		DX
@@ -149,11 +149,11 @@ redesenha_selecao:
 		PUSH	DX
 		PUSH	SI
 		CALL	limpa_tela
-		MOV		BYTE [cor],amarelo
+		MOV		BYTE [cor],C_SOL_AMAR
 		MOV		DH,2
 		MOV		SI,str_titulo
 		CALL	escreve_centro
-		MOV		BYTE [cor],branco
+		MOV		BYTE [cor],C_BRANCO
 		MOV		DH,4
 		MOV		SI,str_escolha
 		CALL	escreve_centro
@@ -162,17 +162,17 @@ redesenha_selecao:
 		CALL	desenha_escolha
 		MOV		SI,jog2
 		CALL	desenha_escolha
-		MOV		BYTE [cor],cinza			; Como trocar de cor
-		MOV		DH,21
+		MOV		BYTE [cor],C_LILAS			; Como trocar de cor
+		MOV		DH,20
 		MOV		DL,13
 		MOV		SI,str_troca1
 		CALL	escreve
 		MOV		DL,53
 		MOV		SI,str_troca2
 		CALL	escreve
-		MOV		BYTE [cor],branco			; Tabela de controles
+		MOV		BYTE [cor],C_BRANCO			; Tabela de controles
 		MOV		SI,str_controles
-		MOV		DH,22
+		MOV		DH,21
 rs_controles:
 		MOV		DL,10
 		CALL	escreve						; Coluna do jogador 1
@@ -183,7 +183,7 @@ rs_controles:
 		INC		DH
 		CMP		BYTE [SI],0FFh				; Fim da tabela
 		JNE		rs_controles
-		MOV		BYTE [cor],amarelo
+		MOV		BYTE [cor],C_SOL_AMAR
 		MOV		DH,29
 		MOV		SI,str_enter
 		CALL	escreve_centro
@@ -216,13 +216,13 @@ pr_round:
 		MOV		BYTE [msg_atual],0
 		CALL	redesenha_luta
 		MOV		SI,str_round				; Anúncio: "ROUND n" e "LUTEM!"
-		MOV		AL,amarelo
+		MOV		AL,C_SOL_AMAR
 		CALL	mostra_msg
 		MOV		CX,27						; ~1,5 s
 		CALL	espera
 		CALL	esconde_msg
 		MOV		SI,str_lutem
-		MOV		AL,branco_intenso
+		MOV		AL,C_BRANCO
 		CALL	mostra_msg
 		MOV		CX,14						; ~0,8 s
 		CALL	espera
@@ -271,7 +271,7 @@ pr_acabou:
 		CMP		AL,3
 		JNE		pr_fim_round
 		MOV		SI,str_duplo				; Duplo nocaute: o round é repetido
-		MOV		AL,amarelo
+		MOV		AL,C_SOL_AMAR
 		CALL	mostra_msg
 		MOV		CX,45
 		CALL	espera
@@ -436,14 +436,39 @@ vf_fim:
 
 ;------------------------------------------------------------------------------
 ; redesenha_luta: desenha a tela da luta inteira (início do round e depois de
-; fechar o menu de saída)
+; fechar o menu de saída). Desenhar o cenário é demorado: se ele já está na
+; tela (mesma partida), só o que está na frente dele é apagado: a caixa de
+; saída e os lutadores (a mensagem do meio já foi apagada por esconde_msg).
 redesenha_luta:
 		PUSH	AX
 		PUSH	DX
 		PUSH	SI
-		CALL	limpa_tela
+		CMP		BYTE [fundo_pronto],0
+		JE		rl_tudo
+		CMP		BYTE [caixa_aberta],0
+		JE		rl_lutadores_velhos
+		MOV		BYTE [caixa_aberta],0
+		MOV		AX,176						; Retângulo da caixa de caixa_mensagem
+		PUSH	AX
+		MOV		AX,226
+		PUSH	AX
+		MOV		AX,463
+		PUSH	AX
+		MOV		AX,268
+		PUSH	AX
+		CALL	restaura_fundo
+rl_lutadores_velhos:
+		MOV		SI,jog1						; Apaga os lutadores do jeito que estão na tela
+		CALL	apaga_lutador
+		MOV		SI,jog2
+		CALL	apaga_lutador
 		CALL	esquece_desenho
+		JMP		rl_placar
+rl_tudo:
+		CALL	esquece_desenho
+		CALL	limpa_tela
 		CALL	desenha_arena
+rl_placar:
 		MOV		AL,[jog1+J_COR]				; Placar: nomes, round, energia, rounds, tempo
 		MOV		[cor],AL
 		MOV		DH,1
@@ -455,7 +480,7 @@ redesenha_luta:
 		MOV		DL,69
 		MOV		SI,str_jog2
 		CALL	escreve
-		MOV		BYTE [cor],branco
+		MOV		BYTE [cor],C_BRANCO
 		MOV		SI,str_round
 		CALL	escreve_centro
 		MOV		SI,jog1
@@ -488,7 +513,7 @@ rl_lutadores:
 
 ;------------------------------------------------------------------------------
 ; mostra_msg: SI = texto, AL = cor. Mensagem no meio da arena (acima dos
-; lutadores, abaixo do monte); redesenha_luta a repõe se a tela for refeita.
+; lutadores, na frente do sol); redesenha_luta a repõe se a tela for refeita.
 mostra_msg:
 		PUSH	DX
 		MOV		[msg_ptr],SI
@@ -500,7 +525,8 @@ mostra_msg:
 		POP		DX
 		RET
 
-; esconde_msg: apaga a mensagem do meio da arena
+; esconde_msg: apaga a mensagem do meio da arena (devolve o fundo da linha) e
+; desenha de novo os lutadores, caso um deles estivesse no ar atrás dela
 esconde_msg:
 		PUSH	DX
 		PUSH	SI
@@ -508,6 +534,7 @@ esconde_msg:
 		MOV		DH,LINHA_MSG
 		MOV		SI,[msg_ptr]
 		CALL	apaga_centro
+		CALL	repinta_lutadores
 		POP		SI
 		POP		DX
 		RET
@@ -544,7 +571,7 @@ pausa:
 		PUSH	BX
 		PUSH	SI
 		MOV		SI,str_pausa
-		MOV		AL,amarelo
+		MOV		AL,C_SOL_AMAR
 		CALL	mostra_msg
 pa_laco:
 		CALL	le_teclado
@@ -632,7 +659,7 @@ redesenha_gameover:
 		PUSH	DX
 		PUSH	SI
 		CALL	limpa_tela
-		MOV		BYTE [cor],amarelo
+		MOV		BYTE [cor],C_SOL_AMAR
 		MOV		DH,6
 		MOV		SI,str_gameover
 		CALL	escreve_centro
@@ -661,11 +688,11 @@ rg_desenha:
 		MOV		DH,17
 		MOV		SI,str_venceu
 		CALL	escreve_centro
-		MOV		BYTE [cor],branco
+		MOV		BYTE [cor],C_BRANCO
 		MOV		DH,19
 		MOV		SI,str_placar
 		CALL	escreve_centro
-		MOV		BYTE [cor],branco_intenso
+		MOV		BYTE [cor],C_BRANCO
 		MOV		DH,23
 		MOV		SI,str_nova
 		CALL	escreve_centro
@@ -678,7 +705,7 @@ rg_desenha:
 
 segment data
 		LINHA_MSG	EQU	13					; Linha de texto das mensagens na arena
-		N_CORES		EQU	8					; Tamanho da lista de cores (potência de 2)
+		N_CORES		EQU	4					; Tamanho da lista de cores (potência de 2)
 tempo		DW	TEMPO_ROUND					; Segundos restantes do round
 fracao		DB	0							; Acumula 5 por tique; 91 = 5 segundos
 tempo_mudou	DB	0
@@ -689,9 +716,9 @@ msg_cor		DB	0
 msg_ptr		DW	0
 idx1		DB	0							; Cor escolhida (índice em lista_cores)
 idx2		DB	1
-lista_cores	DB	vermelho, azul_claro, verde_claro, amarelo, magenta_claro, cyan_claro, marrom, branco
-nomes_cores	DB	'VERMELHO',0, '  AZUL  ',0, ' VERDE  ',0, 'AMARELO ',0
-			DB	'MAGENTA ',0, ' CIANO  ',0, ' MARROM ',0, ' BRANCO ',0
+; Só cores que não aparecem no cenário, para os lutadores se destacarem dele
+lista_cores	DB	C_CIANO, C_VERDE, C_LILAS, C_BRANCO
+nomes_cores	DB	' CIANO  ',0, ' VERDE  ',0, ' LILAS  ',0, ' BRANCO ',0
 str_titulo	DB	'D O J O   8 0 8 6',0
 str_escolha	DB	'ESCOLHAM A COR DOS LUTADORES',0
 str_jog1	DB	'JOGADOR 1',0
@@ -704,6 +731,8 @@ str_controles DB 'A  D   andar',0,		1Bh,'  ',1Ah,'   andar',0
 			DB	'R      chute',0,		'N      chute',0
 			DB	'T      soco',0,		'M      soco',0
 			DB	'S + R  rasteira',0,	19h,' + N  rasteira',0
+			DB	'tr',0A0h,'s + R  chute girat',0A2h,'rio',0,	'tr',0A0h,'s + N  chute girat',0A2h,'rio',0
+			DB	'tr',0A0h,'s + T  investida',0,	'tr',0A0h,'s + M  investida',0
 			DB	0FFh
 str_enter	DB	'ENTER  come',87h,'a a luta          Q  sai',0
 str_round	DB	'ROUND 1',0

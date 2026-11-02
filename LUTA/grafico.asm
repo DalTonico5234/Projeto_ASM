@@ -8,18 +8,23 @@
 %include "defs.inc"
 
 extern line, circle, full_circle, cursor, caracter
+extern aplica_paleta, desenha_cenario, restaura_fundo, fundo_pronto
 global cor, limpa_tela, ret_cheio, retangulo, escreve, escreve_centro, apaga_centro
-global caixa_mensagem, desenha_arena, desenha_energia, desenha_rounds, desenha_tempo
+global caixa_aberta, caixa_mensagem, desenha_arena, desenha_energia, desenha_rounds, desenha_tempo
 global escreve_morte_subita
 
 segment code
 
 ;------------------------------------------------------------------------------
-; limpa_tela: entra (de novo) no modo 12h, o que também apaga a tela inteira
+; limpa_tela: entra (de novo) no modo 12h, o que também apaga a tela inteira,
+; e põe a paleta retrowave
 limpa_tela:
 		PUSH	AX
 		MOV		AX,0012h					; AH = 0 (muda modo), AL = 12h (640x480 16 cores)
 		INT		10h
+		CALL	aplica_paleta
+		MOV		BYTE [fundo_pronto],0		; O cenário precisa ser desenhado de novo
+		MOV		BYTE [caixa_aberta],0
 		POP		AX
 		RET
 
@@ -130,24 +135,69 @@ ec_achou:
 		RET
 
 ;------------------------------------------------------------------------------
-; apaga_centro: apaga um texto escrito com escreve_centro (reescreve em preto)
+; apaga_centro: apaga o texto de SI escrito com escreve_centro na linha DH.
+; Com o cenário na tela, repinta o retângulo do texto com as cores do fundo;
+; senão reescreve o texto na cor do fundo.
 apaga_centro:
 		PUSH	AX
+		PUSH	BX
+		PUSH	CX
+		PUSH	SI
+		CMP		BYTE [fundo_pronto],0
+		JE		ac_reescreve
+		XOR		CX,CX						; CX = tamanho do texto
+ac_conta:
+		CMP		BYTE [SI],0
+		JE		ac_contou
+		INC		SI
+		INC		CX
+		JMP		ac_conta
+ac_contou:
+		MOV		AX,CX						; Coluna = 40 - tamanho/2 (como em escreve_centro)
+		SHR		AX,1
+		MOV		BX,40
+		SUB		BX,AX
+		SHL		BX,1						; x1 = coluna * 8
+		SHL		BX,1
+		SHL		BX,1
+		PUSH	BX
+		MOV		AL,16						; A linha de texto DH ocupa as linhas da tela
+		MUL		DH							; DH*16 a DH*16+15: y = 464-DH*16 a 479-DH*16
+		MOV		SI,464
+		SUB		SI,AX
+		PUSH	SI
+		SHL		CX,1						; x2 = x1 + tamanho*8 - 1
+		SHL		CX,1
+		SHL		CX,1
+		ADD		BX,CX
+		DEC		BX
+		PUSH	BX
+		ADD		SI,15
+		PUSH	SI
+		CALL	restaura_fundo
+		JMP		ac_fim
+ac_reescreve:
 		MOV		AL,[cor]
-		MOV		BYTE [cor],preto
+		MOV		BYTE [cor],C_FUNDO
 		CALL	escreve_centro
 		MOV		[cor],AL
+ac_fim:
+		POP		SI
+		POP		CX
+		POP		BX
 		POP		AX
 		RET
 
 ;------------------------------------------------------------------------------
 ; caixa_mensagem: caixa com borda no meio da tela e a string de SI dentro
+; (caixa_aberta = 1 avisa redesenha_luta que precisa apagá-la)
 caixa_mensagem:
 		PUSH	AX
 		PUSH	DX
+		MOV		BYTE [caixa_aberta],1
 		MOV		AL,[cor]
 		PUSH	AX
-		MOV		BYTE [cor],preto			; Fundo preto
+		MOV		BYTE [cor],C_FUNDO			; Fundo da cor do céu
 		MOV		AX,176
 		PUSH	AX
 		MOV		AX,226
@@ -157,7 +207,7 @@ caixa_mensagem:
 		MOV		AX,268
 		PUSH	AX
 		CALL	ret_cheio
-		MOV		BYTE [cor],branco_intenso	; Borda dupla
+		MOV		BYTE [cor],C_NEON_ROSA		; Borda dupla em neon
 		MOV		AX,176
 		PUSH	AX
 		MOV		AX,226
@@ -176,7 +226,7 @@ caixa_mensagem:
 		MOV		AX,265
 		PUSH	AX
 		CALL	retangulo
-		MOV		BYTE [cor],amarelo
+		MOV		BYTE [cor],C_SOL_AMAR
 		MOV		DH,14						; Linha 14 fica no meio da caixa
 		CALL	escreve_centro
 		POP		AX
@@ -186,22 +236,13 @@ caixa_mensagem:
 		RET
 
 ;------------------------------------------------------------------------------
-; desenha_arena: delimitadores, chão, cenário e dica de teclas
+; desenha_arena: cenário (com os delimitadores da arena), chão e dica de teclas
 desenha_arena:
 		PUSH	AX
 		PUSH	DX
 		PUSH	SI
-		MOV		BYTE [cor],branco			; Delimitadores da arena
-		MOV		AX,ARENA_X1
-		PUSH	AX
-		MOV		AX,ARENA_Y1
-		PUSH	AX
-		MOV		AX,ARENA_X2
-		PUSH	AX
-		MOV		AX,ARENA_Y2
-		PUSH	AX
-		CALL	retangulo
-		MOV		BYTE [cor],marrom			; Chão de madeira (duas faixas abaixo da linha)
+		CALL	desenha_cenario				; Sol, montanhas, palmeiras, grade, carro e borda
+		MOV		BYTE [cor],C_NEON_ROSA		; Faixa neon abaixo do chão
 		MOV		AX,ARENA_X1
 		PUSH	AX
 		MOV		AX,ARENA_Y1-6
@@ -211,23 +252,7 @@ desenha_arena:
 		MOV		AX,ARENA_Y1-2
 		PUSH	AX
 		CALL	ret_cheio
-; Cenário: o monte e o sol ficam acima da altura máxima do pulo, então os
-; lutadores nunca passam por cima deles e não os apagam
-		MOV		BYTE [cor],vermelho			; Sol
-		MOV		AX,530
-		PUSH	AX
-		MOV		AX,345
-		PUSH	AX
-		MOV		AX,22
-		PUSH	AX
-		CALL	full_circle
-		MOV		BYTE [cor],azul_claro		; Encosta do monte
-		MOV		SI,monte
-		CALL	polilinha
-		MOV		BYTE [cor],branco_intenso	; Neve no topo
-		MOV		SI,neve
-		CALL	polilinha
-		MOV		BYTE [cor],cinza			; Dica de teclas abaixo da arena
+		MOV		BYTE [cor],C_LILAS			; Dica de teclas abaixo da arena
 		MOV		DH,28
 		MOV		SI,str_dica
 		CALL	escreve_centro
@@ -237,29 +262,9 @@ desenha_arena:
 		RET
 
 ;------------------------------------------------------------------------------
-; polilinha: liga os pontos (dw x, dw y, ...) apontados por SI; termina em x = 0
-polilinha:
-		PUSH	AX
-		PUSH	SI
-pl_laco:
-		CMP		WORD [SI+4],0				; Não há próximo ponto: acabou
-		JE		pl_fim
-		PUSH	WORD [SI]					; Reta do ponto atual ao próximo
-		PUSH	WORD [SI+2]
-		PUSH	WORD [SI+4]
-		PUSH	WORD [SI+6]
-		CALL	line
-		ADD		SI,4
-		JMP		pl_laco
-pl_fim:
-		POP		SI
-		POP		AX
-		RET
-
-;------------------------------------------------------------------------------
 ; desenha_energia: barra de energia de um lutador, com 10 triângulos no
 ; estilo Karateka. SI = lutador, DL = 0 para o lado esquerdo, 1 para o direito.
-; Triângulo aceso (cor do lutador) = energia que resta; cinza = energia perdida.
+; Triângulo aceso (cor do lutador) = energia que resta; apagado = energia perdida.
 ; Usa J_DENER para redesenhar só os triângulos que mudaram.
 desenha_energia:
 		PUSH	AX
@@ -287,7 +292,7 @@ de_desenha:
 		MOV		AL,[SI+J_COR]
 		CMP		CL,[SI+J_ENER]				; Triângulos abaixo da energia ficam acesos
 		JB		de_cor_ok
-		MOV		AL,cinza
+		MOV		AL,C_HALO
 de_cor_ok:
 		MOV		[cor],AL
 		PUSH	BX
@@ -385,7 +390,7 @@ dr_marcador:								; AL = rounds necessários, BX = x
 		POP		AX
 		RET
 dr_vazio:
-		MOV		BYTE [cor],cinza			; Ainda não vencido: só o contorno
+		MOV		BYTE [cor],C_LILAS			; Ainda não vencido: só o contorno
 		PUSH	BX
 		MOV		AX,407
 		PUSH	AX
@@ -413,7 +418,7 @@ desenha_tempo:
 		ADD		AX,'00'
 		MOV		[str_tempo+6],AL
 		MOV		[str_tempo+7],AH
-		MOV		BYTE [cor],branco_intenso
+		MOV		BYTE [cor],C_BRANCO
 		MOV		DH,3
 		MOV		SI,str_tempo
 		CALL	escreve_centro
@@ -428,7 +433,7 @@ desenha_tempo:
 escreve_morte_subita:
 		PUSH	DX
 		PUSH	SI
-		MOV		BYTE [cor],amarelo
+		MOV		BYTE [cor],C_SOL_AMAR
 		MOV		DH,3
 		MOV		SI,str_morte
 		CALL	escreve_centro
@@ -437,12 +442,8 @@ escreve_morte_subita:
 		RET
 
 segment data
-cor			DB	branco_intenso				; Cor usada por plot_xy, caracter e line
+cor			DB	C_BRANCO
+caixa_aberta DB	0							; 1 = a caixa de mensagem está na tela				; Cor usada por plot_xy, caracter e line
 str_tempo	DB	'    0:00    ',0			; 12 caracteres: cobre "MORTE SUBITA" inteira
 str_morte	DB	'MORTE SUBITA',0
 str_dica	DB	'P  pausa        Q  sair',0
-; Monte (dw x, dw y; termina com x = 0)
-; A base do monte fica acima do ponto mais alto do pulo (os lutadores não o apagam)
-monte		DW	232,ARENA_Y2-90, 300,ARENA_Y2-30, 320,ARENA_Y2-24, 340,ARENA_Y2-30, 408,ARENA_Y2-90, 0,0
-neve		DW	282,ARENA_Y2-46, 300,ARENA_Y2-30, 320,ARENA_Y2-24, 340,ARENA_Y2-30, 358,ARENA_Y2-46
-			DW	346,ARENA_Y2-40, 334,ARENA_Y2-50, 320,ARENA_Y2-38, 306,ARENA_Y2-50, 294,ARENA_Y2-40, 282,ARENA_Y2-46, 0,0

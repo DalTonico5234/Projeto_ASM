@@ -7,10 +7,10 @@
 
 %include "defs.inc"
 
-extern line, full_circle, cor
+extern line, full_circle, cor, restaura_fundo, apaga_reta
 extern tecla_nova, tecla_press
 global jog1, jog2, inicia_jogadores, atualiza_jogador, desenha_pose, atualiza_lutadores
-global esquece_desenho
+global esquece_desenho, repinta_lutadores, apaga_lutador
 
 segment code
 
@@ -39,9 +39,8 @@ ij_comum:
 		MOV		BYTE [SI+J_IMPACTO],0
 		MOV		BYTE [SI+J_ATQ],ATQ_NENHUM
 		MOV		BYTE [SI+J_TBX],0
-		MOV		BYTE [SI+J_ENER],ENERGIA
-		MOV		BYTE [SI+J_VIS],0			; Nada desenhado ainda
-		RET
+		MOV		BYTE [SI+J_ENER],ENERGIA	; (J_VIS fica: o desenho do round anterior
+		RET									; ainda está na tela e redesenha_luta o apaga)
 
 ;------------------------------------------------------------------------------
 ; esquece_desenho: avisa que a tela foi limpa, então não há o que apagar
@@ -50,6 +49,24 @@ esquece_desenho:
 		MOV		BYTE [jog2+J_VIS],0
 		MOV		BYTE [jog1+J_DENER],0FFh	; Barras de energia: desenhar inteiras
 		MOV		BYTE [jog2+J_DENER],0FFh
+		RET
+
+;------------------------------------------------------------------------------
+; repinta_lutadores: desenha de novo, por cima, os lutadores que estão na tela
+; (depois de apagar uma mensagem que podia estar na frente deles)
+repinta_lutadores:
+		PUSH	SI
+		MOV		SI,jog1
+		CALL	rp_um
+		MOV		SI,jog2
+		CALL	rp_um
+		POP		SI
+		RET
+rp_um:
+		CMP		BYTE [SI+J_VIS],0
+		JE		rp_fim
+		CALL	desenha_lutador
+rp_fim:
 		RET
 
 ;------------------------------------------------------------------------------
@@ -72,20 +89,37 @@ aj_conta:
 		CALL	tecla_press					; está apertada (separa rasteira de chute abaixado)
 		JNZ		aj_conta_bx
 		MOV		BYTE [SI+J_TBX],0
-		JMP		aj_estado
+		JMP		aj_tras
 aj_conta_bx:
 		CMP		BYTE [SI+J_TBX],255
-		JE		aj_estado
+		JE		aj_tras
 		INC		BYTE [SI+J_TBX]
+aj_tras:
+		MOV		AL,[SI+J_K_ESQ]				; Conta também há quantos tiques a tecla de trás
+		TEST	BYTE [SI+J_DIR],80h			; está apertada (a do lado oposto ao que o
+		JZ		aj_tras_tecla				; lutador olha): separa o ataque especial do
+		MOV		AL,[SI+J_K_DIR]				; golpe dado recuando
+aj_tras_tecla:
+		CALL	tecla_press
+		JNZ		aj_conta_tras
+		MOV		BYTE [SI+J_TTRAS],0
+		JMP		aj_estado
+aj_conta_tras:
+		CMP		BYTE [SI+J_TTRAS],255
+		JE		aj_estado
+		INC		BYTE [SI+J_TTRAS]
 aj_estado:
 		CMP		BYTE [SI+J_EST],E_PULO
 		JE		aj_no_ar
 		CMP		BYTE [SI+J_ATQ],ATQ_NENHUM
 		JE		aj_no_chao
 
-; Golpe no chão (em pé ou abaixado): o lutador não sai do lugar até o golpe acabar
+; Golpe no chão (em pé ou abaixado): o lutador não sai do lugar até o golpe
+; acabar (a não ser na investida, que avança sozinha)
 		CALL	vira_rasteira
+		CALL	vira_especial
 		CALL	avanca_golpe
+		CALL	avanca_investida
 		JMP		aj_fim
 
 ; No ar: pode começar um golpe (se não houver um em andamento), sobe e desce
@@ -166,28 +200,54 @@ aj_fim:
 ; começa o golpe (J_ATQ e J_T). ZF = 0 se começou um golpe, ZF = 1 se não.
 inicia_golpe:
 		PUSH	AX
+		PUSH	BX
 		MOV		AL,[SI+J_K_SOCO]
 		CALL	tecla_nova
 		MOV		AH,ATQ_SOCO					; MOV não altera o ZF de tecla_nova
-		JNZ		ig_comeca
+		JNZ		ig_especial
 		MOV		AL,[SI+J_K_CHUTE]
 		CALL	tecla_nova
 		MOV		AH,ATQ_CHUTE
 		JNZ		ig_chute
+		POP		BX
 		POP		AX							; ZF = 1: nenhum golpe
 		RET
 ig_chute:
 		CMP		BYTE [SI+J_EST],E_ABAIXADO	; Chute abaixado: se acabou de abaixar,
-		JNE		ig_comeca					; é rasteira; se já estava abaixado,
+		JNE		ig_especial					; é rasteira; se já estava abaixado,
 		CMP		BYTE [SI+J_TBX],JANELA_RAST	; é o chute na diagonal para cima
 		JA		ig_comeca
 		MOV		AH,ATQ_RASTEIRA
+		JMP		ig_comeca
+ig_especial:
+		CALL	especial_de					; Em pé com trás recém-apertado: especial
 ig_comeca:
 		MOV		[SI+J_ATQ],AH
-		MOV		BYTE [SI+J_T],T_GOLPE
+		MOV		BL,AH						; Duração do golpe (tabela t_golpe)
+		XOR		BH,BH
+		MOV		BL,[BX+t_golpe]
+		MOV		[SI+J_T],BL
 		MOV		BYTE [SI+J_ACERTOU],0
 		OR		AH,AH						; ZF = 0: começou um golpe (AH > 0)
+		POP		BX
 		POP		AX							; POP não altera os flags
+		RET
+
+; especial_de: AH = soco ou chute. Se o lutador SI está em pé no chão e a
+; tecla de trás foi apertada há no máximo JANELA_ESP tiques, troca AH pelo
+; especial: chute -> chute giratório, soco -> investida. Senão AH fica igual.
+especial_de:
+		CMP		BYTE [SI+J_EST],E_PARADO	; Só em pé e no chão
+		JNE		ed_fim
+		CMP		BYTE [SI+J_TTRAS],0			; Tecla de trás solta
+		JE		ed_fim
+		CMP		BYTE [SI+J_TTRAS],JANELA_ESP	; Já vinha recuando: golpe normal
+		JA		ed_fim
+		CMP		AH,ATQ_CHUTE
+		MOV		AH,ATQ_GIRO
+		JE		ed_fim
+		MOV		AH,ATQ_INVESTIDA
+ed_fim:
 		RET
 
 ;------------------------------------------------------------------------------
@@ -211,15 +271,79 @@ vr_fim:
 		RET
 
 ;------------------------------------------------------------------------------
+; vira_especial: soco ou chute em pé que acabou de começar vira o ataque
+; especial se a tecla de trás for apertada logo depois (até JANELA_ESP tiques)
+vira_especial:
+		PUSH	AX
+		PUSH	BX
+		MOV		AH,[SI+J_ATQ]
+		CMP		AH,ATQ_SOCO
+		JE		ve_golpe
+		CMP		AH,ATQ_CHUTE
+		JNE		ve_fim
+ve_golpe:
+		CMP		BYTE [SI+J_T],T_GOLPE-JANELA_ESP+1
+		JB		ve_fim						; O golpe já está adiantado demais
+		CMP		BYTE [SI+J_ACERTOU],0		; O golpe já acertou: continua normal
+		JNE		ve_fim
+		CALL	especial_de
+		CMP		AH,[SI+J_ATQ]				; Não virou especial
+		JE		ve_fim
+		MOV		[SI+J_ATQ],AH
+		MOV		BL,AH						; O especial começa do início
+		XOR		BH,BH
+		MOV		BL,[BX+t_golpe]
+		MOV		[SI+J_T],BL
+ve_fim:
+		POP		BX
+		POP		AX
+		RET
+
+;------------------------------------------------------------------------------
+; avanca_investida: na investida, o lutador avança VEL_INV por tique enquanto
+; o punho está esticado (até acertar)
+avanca_investida:
+		PUSH	AX
+		CMP		BYTE [SI+J_ATQ],ATQ_INVESTIDA
+		JNE		ai_fim
+		CMP		BYTE [SI+J_ACERTOU],0		; Acertou: para de avançar
+		JNE		ai_fim
+		CMP		BYTE [SI+J_T],INV_FIM
+		JB		ai_fim
+		CMP		BYTE [SI+J_T],INV_INICIO
+		JA		ai_fim
+		MOV		AX,VEL_INV
+		TEST	BYTE [SI+J_DIR],80h			; Avança para o lado que olha
+		JZ		ai_anda
+		NEG		AX
+ai_anda:
+		ADD		[SI+J_X],AX
+ai_fim:
+		POP		AX
+		RET
+
+;------------------------------------------------------------------------------
 ; avanca_golpe: um tique do golpe em andamento do lutador SI. Marca o impacto
 ; no tique em que braço ou perna estão esticados (o acerto é conferido pelo
 ; passo, depois dos dois lutadores) e encerra o golpe quando o tempo acaba.
 avanca_golpe:
+		PUSH	BX
 		CALL	descarta_ataques
 		DEC		BYTE [SI+J_T]
 		CMP		BYTE [SI+J_ACERTOU],0		; Já acertou: não confere de novo
 		JNE		avg_fim
 		MOV		AL,[SI+J_T]
+		MOV		BL,[SI+J_ATQ]				; Especiais: acerto conferido em todos os
+		CMP		BL,ATQ_GIRO					; tiques entre imp_inicio e imp_fim
+		JB		avg_normal
+		SUB		BL,ATQ_GIRO
+		XOR		BH,BH
+		CMP		AL,[BX+imp_inicio]
+		JA		avg_fim
+		CMP		AL,[BX+imp_fim]
+		JAE		avg_impacto
+		JMP		avg_fim
+avg_normal:
 		CMP		AL,T_IMPACTO
 		JE		avg_impacto
 		CMP		BYTE [SI+J_EST],E_PULO		; No ar, braço ou perna ficam esticados por
@@ -235,6 +359,7 @@ avg_fim:
 		JNE		avg_volta
 		MOV		BYTE [SI+J_ATQ],ATQ_NENHUM
 avg_volta:
+		POP		BX
 		RET
 
 ;------------------------------------------------------------------------------
@@ -253,7 +378,8 @@ descarta_ataques:
 
 ;------------------------------------------------------------------------------
 ; escolhe_pose: pose da postura; com golpe em andamento, a pose do golpe
-; naquela postura (tabela poses_golpe); andando (neste tique) em pé, alterna
+; naquela postura (tabela poses_golpe); nos especiais, a pose do tique do
+; golpe (poses_giro e poses_investida); andando (neste tique) em pé, alterna
 ; com a pose de passo a cada 2 tiques; andando abaixado, alterna passada larga
 ; e pernas cruzando a cada 4 tiques (passos largos e lentos)
 escolhe_pose:
@@ -263,6 +389,16 @@ escolhe_pose:
 		MOV		BL,[SI+J_ATQ]
 		OR		BL,BL
 		JZ		ep_sem_golpe
+		CMP		BL,ATQ_GIRO					; Especial: a pose muda a cada tique
+		JB		ep_golpe					; (tabela da pose de cada valor de J_T)
+		MOV		BL,[SI+J_T]
+		XOR		BH,BH
+		MOV		AL,[BX+poses_giro]
+		CMP		BYTE [SI+J_ATQ],ATQ_GIRO
+		JE		ep_fim
+		MOV		AL,[BX+poses_investida]
+		JMP		ep_fim
+ep_golpe:
 		MOV		AH,AL						; BX = postura*3 + (golpe-1)
 		SHL		AL,1
 		ADD		AL,AH
@@ -295,7 +431,7 @@ ep_fim:
 
 ;------------------------------------------------------------------------------
 ; atualiza_lutadores: põe na tela o que mudou nos lutadores desde o último
-; desenho. Apagar é redesenhar em preto. Só quem mudou é apagado e
+; desenho. Apagar é devolver o fundo atrás do desenho. Só quem mudou é apagado e
 ; redesenhado. Perto, um pode estar por cima do outro: apagar um pode tirar
 ; pixels do outro, então o outro é desenhado de novo por cima (sem apagar
 ; antes, então ele não pisca).
@@ -408,11 +544,15 @@ cor_atual:
 		MOV		AL,[SI+J_COR]
 		CMP		BYTE [SI+J_PISCA],0
 		JE		ca_fim
-		MOV		AL,branco_intenso			; Acabou de levar golpe: pisca em branco
+		MOV		AL,C_BRANCO					; Acabou de levar golpe: pisca em branco
+		CMP		BYTE [SI+J_COR],C_BRANCO	; (o lutador branco pisca em vermelho)
+		JNE		ca_fim
+		MOV		AL,C_VERMELHO
 ca_fim:
 		RET
 
-; apaga_lutador: redesenha em preto o desenho que está na tela. Se o lutador
+; apaga_lutador: repinta com as cores do fundo os pixels do desenho que está
+; na tela (o quadrado da cabeça e exatamente os pixels de cada reta). Se o lutador
 ; continua no mesmo lugar e virado para o mesmo lado (só a pose ou a cor
 ; mudou), apaga só as retas da pose antiga que não existem na nova: as que
 ; continuam não somem da tela (desenha_lutador passa por cima delas depois).
@@ -443,8 +583,9 @@ apl_tudo:
 		ADD		DX,CHAO
 		MOV		CL,[SI+J_DPOSE]
 		MOV		CH,[SI+J_DDIR]				; Apaga virado para onde foi desenhado
-		MOV		AL,preto
+		MOV		BYTE [apagando],1			; Cabeça e retas apagadas pixel a pixel
 		CALL	desenha_pose
+		MOV		BYTE [apagando],0
 		MOV		WORD [filtro],0
 		MOV		BYTE [SI+J_VIS],0
 apl_fim:
@@ -487,6 +628,8 @@ desenha_lutador:
 ; As retas são desenhadas duas vezes, lado a lado, para ter 2 pixels de largura.
 ; Se [filtro] aponta para outra pose, a cabeça e as retas que também existem
 ; nela são puladas (usado para apagar só o que muda entre duas poses).
+; Com [apagando] = 1, em vez de desenhar, repinta com as cores do fundo o
+; quadrado da cabeça e os pixels de cada reta (AL não é usado).
 desenha_pose:
 		PUSH	AX
 		PUSH	BX
@@ -513,13 +656,28 @@ desenha_pose:
 dp_cabeca:
 		LODSB								; Cabeça: círculo cheio
 		CALL	conv_x
-		PUSH	AX
+		MOV		[x1],AX
 		LODSB
 		CALL	conv_y
+		CMP		BYTE [apagando],0
+		JNE		dp_apaga_cabeca
+		PUSH	WORD [x1]
 		PUSH	AX
 		MOV		AX,RAIO
 		PUSH	AX
 		CALL	full_circle
+		JMP		dp_retas
+dp_apaga_cabeca:
+		MOV		BX,[x1]						; Quadrado em volta da cabeça
+		SUB		BX,RAIO
+		PUSH	BX
+		SUB		AX,RAIO
+		PUSH	AX
+		ADD		BX,2*RAIO
+		PUSH	BX
+		ADD		AX,2*RAIO
+		PUSH	AX
+		CALL	restaura_fundo
 dp_retas:
 		LODSB
 		MOV		CL,AL						; CX = número de retas
@@ -545,14 +703,14 @@ dp_desenha:
 		PUSH	WORD [y1]
 		PUSH	WORD [x2]
 		PUSH	AX
-		CALL	line
+		CALL	traca_reta
 		INC		WORD [x1]					; Segunda passada, 1 pixel ao lado
 		INC		WORD [x2]
 		PUSH	WORD [x1]
 		PUSH	WORD [y1]
 		PUSH	WORD [x2]
 		PUSH	AX
-		CALL	line
+		CALL	traca_reta
 dp_proxima:
 		LOOP	dp_laco
 		POP		SI
@@ -561,6 +719,25 @@ dp_proxima:
 		POP		BX
 		POP		AX
 		RET
+
+; traca_reta: mesmos parâmetros da line (PUSH x1; PUSH y1; PUSH x2; PUSH y2).
+; Desenha a reta com a line ou, com [apagando] = 1, apaga com apaga_reta.
+traca_reta:
+		PUSH	BP
+		MOV		BP,SP
+		PUSH	WORD [BP+10]				; Repassa os 4 parâmetros
+		PUSH	WORD [BP+8]
+		PUSH	WORD [BP+6]
+		PUSH	WORD [BP+4]
+		CMP		BYTE [apagando],0
+		JNE		tr_apaga
+		CALL	line
+		JMP		tr_fim
+tr_apaga:
+		CALL	apaga_reta
+tr_fim:
+		POP		BP
+		RET		8
 
 ; reta_no_filtro: SI = reta (dx1,dy1,dx2,dy2). CF = 1 se a mesma reta (em
 ; qualquer sentido) existe na pose apontada por [filtro]; CF = 0 se não, ou
@@ -622,6 +799,8 @@ conv_y:
 segment data
 		RAIO		EQU	7					; Raio da cabeça
 		PERTO		EQU	96					; Distância em que os desenhos podem se encostar
+		INV_INICIO	EQU	8					; Investida: tiques (valor de J_T) em que o
+		INV_FIM		EQU	3					; lutador avança com o punho esticado
 px			DW	0							; Base da pose sendo desenhada
 py			DW	0
 pdir		DB	0
@@ -630,25 +809,39 @@ x1			DW	0
 y1			DW	0
 x2			DW	0
 filtro		DW	0							; Pose cujas retas desenha_pose pula (0 = nenhuma)
+apagando	DB	0							; 1 = desenha_pose apaga em vez de desenhar
 
 ; Lutadores. Teclas: esquerda, direita, pular, abaixar, chute, soco
 jog1:		DW	200,0,0						; J_X, J_Y, J_VY
-			DB	1,E_PARADO,0,ENERGIA,0,vermelho,0,P_PARADO,0	; J_DIR ... J_PASSO
+			DB	1,E_PARADO,0,ENERGIA,0,C_CIANO,0,P_PARADO,0	; J_DIR ... J_PASSO
 			DB	TC_A,TC_D,TC_W,TC_S,TC_R,TC_T	; J_K_...
 			DB	0FFh						; J_DENER
 			DW	0,0							; J_DX, J_DY
 			DB	0,0,0,0,0,0,1,0				; J_DPOSE, J_DCOR, J_VIS, J_IMPACTO, J_ATQ, J_TBX, J_DDIR, J_ACERTOU
+			DB	0							; J_TTRAS
 jog2:		DW	440,0,0
-			DB	-1,E_PARADO,0,ENERGIA,0,azul_claro,0,P_PARADO,0
+			DB	-1,E_PARADO,0,ENERGIA,0,C_VERDE,0,P_PARADO,0
 			DB	TC_ESQ,TC_DIR,TC_CIMA,TC_BAIXO,TC_N,TC_M
 			DB	0FFh
 			DW	0,0
 			DB	0,0,0,0,0,0,-1,0
+			DB	0							; J_TTRAS
 
 ; Poses (olhando para a direita; y = 0 no pé)
 poses		DW	p_parado, p_abaixado, p_pulo, p_soco, p_chute, p_anda
 			DW	p_soco_bx, p_chute_bx, p_soco_ar, p_chute_ar, p_rasteira, p_anda_bx
-			DW	p_passada_bx
+			DW	p_passada_bx, p_giro_1, p_giro_2, p_giro_chute, p_inv_prep, p_investida
+
+; Duração de cada golpe em tiques (índice = J_ATQ)
+t_golpe		DB	0, T_GOLPE, T_GOLPE, T_GOLPE, T_GIRO, T_INVESTIDA
+; Especiais: tiques (valor de J_T) em que o acerto é conferido, do primeiro
+; ao último (índice = J_ATQ - ATQ_GIRO: giratório, investida)
+imp_inicio	DB	5, INV_INICIO
+imp_fim		DB	4, INV_FIM
+; Pose de cada tique dos especiais (índice = J_T, que vai diminuindo)
+;				  0         1         2         3            4            5            6            7         8         9         10
+poses_giro	DB	P_PARADO, P_PARADO, P_PARADO, P_GIRO_CHUTE, P_GIRO_CHUTE, P_GIRO_CHUTE, P_GIRO_CHUTE, P_GIRO_2, P_GIRO_2, P_GIRO_1, P_GIRO_1
+poses_investida	DB	P_PARADO, P_PARADO, P_SOCO, P_INVESTIDA, P_INVESTIDA, P_INVESTIDA, P_INVESTIDA, P_INVESTIDA, P_INVESTIDA, P_INV_PREP
 
 ; Pose de cada golpe em cada postura: índice = postura*3 + (golpe-1)
 ; Golpes: soco, chute, rasteira (a rasteira sempre acontece abaixada)
@@ -728,6 +921,38 @@ p_passada_bx DB	4,62, 9
 			DB	0,26,-14,10, -14,10,-28,0		; perna de trás bem atrás
 			DB	0,50,12,40, 12,40,18,52
 			DB	0,50,6,38, 6,38,12,46
+; Chute giratório (de costas no meio do giro: as poses 1 e 2 já vêm espelhadas)
+p_giro_1	DB	-3,100, 9
+			DB	-2,90,0,52						; tronco virando
+			DB	0,52,-4,28, -4,28,-6,0			; perna de apoio
+			DB	0,52,-14,46, -14,46,-10,30		; outra perna sobe, dobrada
+			DB	-2,86,-12,76, -12,76,-18,84		; guarda virada para trás
+			DB	-2,86,-6,74, -6,74,-12,80
+p_giro_2	DB	-6,98, 7
+			DB	-4,88,0,52						; de costas
+			DB	0,52,2,28, 2,28,0,0				; perna de apoio
+			DB	0,52,-12,40, -12,40,-6,26		; perna encolhida, pronta para sair
+			DB	-4,84,-26,80					; braços abertos pelo giro
+			DB	-4,84,16,88
+p_giro_chute DB	-12,94, 7
+			DB	-8,84,0,52						; tronco inclinado para trás
+			DB	0,52,-4,26, -4,26,-6,0			; perna de apoio
+			DB	0,52,24,70, 24,70,48,84			; perna esticada na altura da cabeça
+			DB	-8,80,-24,72					; braços equilibrando
+			DB	-8,80,-20,92
+; Investida
+p_inv_prep	DB	-2,92, 9
+			DB	-2,82,0,46						; agachado para dar o bote
+			DB	0,46,12,24, 12,24,18,0
+			DB	0,46,-10,24, -10,24,-16,0
+			DB	-2,78,-14,70, -14,70,-6,62		; punho recolhido atrás
+			DB	-2,78,8,70, 8,70,14,78
+p_investida	DB	12,94, 8
+			DB	8,84,0,50						; corpo lançado para a frente
+			DB	0,50,18,30, 18,30,24,0			; perna da frente dobrada
+			DB	0,50,-20,24, -20,24,-34,0		; perna de trás esticada
+			DB	8,82,46,86						; punho esticado
+			DB	8,82,-10,74, -10,74,-6,66		; outro braço para trás
 p_rasteira	DB	-24,40, 9
 			DB	-18,30,0,14						; tronco baixo, inclinado para trás
 			DB	0,14,22,4, 22,4,46,1			; perna da frente rente ao chão

@@ -9,9 +9,11 @@
 NASM = nasm16
 LINK = freelink
 
-# Módulos do jogo e funções gráficas do professor (o main precisa ser o primeiro)
-MODULOS = main init teclado tempo grafico jogador colisao jogo \
-          line circle fcircle cursor caracter plot_xy
+# Módulos do jogo e funções gráficas do professor (o main precisa ser o primeiro
+# e o copia, com os 80 KB da cópia do fundo, o último: as funções do professor
+# não têm segment e precisam ficar a menos de 64 KB do resto do código)
+MODULOS = main init teclado tempo grafico fundo cenario jogador colisao jogo \
+          line circle fcircle cursor caracter plot_xy copia
 OBJS = $(addsuffix .obj,$(MODULOS))
 
 dojo.exe: $(OBJS)
@@ -22,7 +24,13 @@ dojo.exe: $(OBJS)
 	$(NASM) -f obj -o $@ -l $*.lst $<
 
 # Dependências de arquivos incluídos com %include
-teclado.obj grafico.obj jogador.obj colisao.obj jogo.obj: defs.inc
+teclado.obj grafico.obj fundo.obj jogador.obj colisao.obj jogo.obj: defs.inc
+
+# cenario.asm inclui as 1779 retas do cenário: a listagem ficaria grande demais
+# para o NASM16 (ele trava no meio), então este módulo é montado sem .lst
+cenario.obj: cenario.asm cenario.inc
+	$(NASM) -f obj -o $@ $<
+
 line.obj: Data.asm
 
 limpa:

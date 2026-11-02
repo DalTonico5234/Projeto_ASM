@@ -2,24 +2,27 @@
 ; Incluído com %include "defs.inc" (só tem EQU, não gera código nem dados)
 
 ;------------------------------------------------------------------------------
-; Cores da paleta padrão do modo 12h (mesma tabela do Data.asm do professor)
-;	I R G B COR
-preto		    equ		0
-azul		    equ		1
-verde		    equ		2
-cyan		    equ		3
-vermelho	    equ		4
-magenta		    equ		5
-marrom		    equ		6
-branco		    equ		7
-cinza		    equ		8
-azul_claro	    equ		9
-verde_claro	    equ		10
-cyan_claro	    equ		11
-rosa		    equ		12
-magenta_claro	equ		13
-amarelo		    equ		14
-branco_intenso	equ		15
+; Paleta retrowave (o modo 12h começa com a paleta padrão; aplica_paleta, em
+; fundo.asm, troca as 16 cores logo depois de cada troca de modo de vídeo).
+; Tirada das 10 imagens de referência: céu roxo-escuro, neon rosa e azul, sol
+; em degradê do amarelo ao magenta. As cores dos lutadores (ciano, verde,
+; lilás, branco) não aparecem no cenário, para eles se destacarem do fundo.
+C_FUNDO		equ		0			; #1f014b  céu e chão (cor de "apagado")
+C_ROXO		equ		1			; #3a0a6a  corpo das montanhas
+C_MAGENTA	equ		2			; #8c1678  brilho do horizonte, base do sol
+C_NEON_ROSA	equ		3			; #ff2bd1  grade do chão, borda da arena
+C_SOL_AMAR	equ		4			; #ffd84c  topo do sol, títulos
+C_SOL_LARANJA	equ		5			; #ff9a4c  meio do sol
+C_SOL_CORAL	equ		6			; #ff4a4e  faixas do sol
+C_SOL_ROSA	equ		7			; #ff1f64  faixas de baixo do sol, rodas do carro
+C_SILHUETA	equ		8			; #0b0024  palmeiras, pneus
+C_NEON_AZUL	equ		9			; #4f6bff  arestas das montanhas
+C_HALO		equ		10			; #5e2a5a  anel do sol, energia perdida
+C_BRANCO	equ		11			; #ffffff  textos, lutador atingido
+C_CIANO		equ		12			; #00f0ff  lutador
+C_VERDE		equ		13			; #4dff2e  lutador
+C_LILAS		equ		14			; #c9a8ff  lutador, textos secundários
+C_VERMELHO	equ		15			; #e8102e  Ferrari F40, lutador branco atingido
 
 ;------------------------------------------------------------------------------
 ; Códigos Make das teclas usadas (o código Break é Make + 80h)
@@ -73,6 +76,19 @@ EMPURRA		equ		8			; recuo de quem leva um golpe
 T_PISCA		equ		3			; tiques que o lutador atingido fica branco
 JANELA_RAST	equ		3			; abaixar até 3 tiques antes (ou depois) do chute = rasteira
 
+; Ataques especiais: apertar a tecla de trás (a do lado oposto ao que o lutador
+; olha) até JANELA_ESP tiques antes ou depois do golpe, em pé e no chão.
+; Trás + chute = chute giratório; trás + soco = investida. Tiram 1 de energia
+; como os outros golpes, mas alcançam mais longe e empurram bem mais; em troca
+; demoram mais e deixam quem errou parado e exposto.
+JANELA_ESP	equ		3			; tiques da janela da tecla de trás
+T_GIRO		equ		10			; duração do chute giratório, em tiques
+T_INVESTIDA	equ		9			; duração da investida
+ALC_GIRO	equ		66			; alcance do chute giratório (o pé desenhado chega a 48)
+ALC_INV		equ		58			; alcance do soco da investida (o lutador avança junto)
+VEL_INV		equ		10			; avanço da investida por tique (6 tiques: 60 pixels)
+EMPURRA_ESP	equ		28			; recuo de quem leva um ataque especial
+
 ;------------------------------------------------------------------------------
 ; Postura do lutador (J_EST). O golpe é independente da postura: o lutador
 ; pode socar ou chutar em pé, abaixado ou no ar (J_ATQ diz qual golpe está
@@ -86,6 +102,8 @@ ATQ_NENHUM	equ		0
 ATQ_SOCO	equ		1
 ATQ_CHUTE	equ		2
 ATQ_RASTEIRA	equ		3			; abaixar e chutar juntos, estando em pé
+ATQ_GIRO	equ		4			; trás + chute: chute giratório
+ATQ_INVESTIDA	equ		5			; trás + soco: investida com o punho
 
 ; Poses (índice da tabela "poses" em jogador.asm)
 P_PARADO	equ		0
@@ -101,6 +119,11 @@ P_CHUTE_AR	equ		9			; no ar: chute na diagonal para baixo
 P_RASTEIRA	equ		10			; rasteira: perna esticada rente ao chão
 P_ANDA_BX	equ		11			; caminhada abaixado: pernas cruzando
 P_PASSADA_BX	equ		12			; caminhada abaixado: passada larga
+P_GIRO_1	equ		13			; chute giratório: começa a virar, de lado
+P_GIRO_2	equ		14			; chute giratório: de costas, braços abertos
+P_GIRO_CHUTE	equ		15			; chute giratório: perna esticada na altura da cabeça
+P_INV_PREP	equ		16			; investida: preparo, punho recolhido
+P_INVESTIDA	equ		17			; investida: avançando com o punho esticado
 
 ;------------------------------------------------------------------------------
 ; Estrutura de um lutador (deslocamentos dentro de jog1/jog2)
@@ -133,4 +156,5 @@ J_ATQ		equ		30			; db  golpe em andamento (ATQ_...)
 J_TBX		equ		31			; db  tiques com a tecla de abaixar apertada (satura em 255)
 J_DDIR		equ		32			; db  direção do desenho que está na tela
 J_ACERTOU	equ		33			; db  1 = o golpe em andamento já acertou
-J_TAM		equ		34			; tamanho da estrutura
+J_TTRAS		equ		34			; db  tiques com a tecla de trás apertada (satura em 255)
+J_TAM		equ		35			; tamanho da estrutura

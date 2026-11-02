@@ -2,8 +2,8 @@
 ;
 ; Regras do acerto (conferidas no tique em que o golpe está esticado; no ar,
 ; em 3 tiques seguidos, valendo um acerto por golpe):
-;   1) o adversário precisa estar na frente de quem golpeia, a até ALC_SOCO
-;      (soco) ou ALC_CHUTE (chute e rasteira);
+;   1) o adversário precisa estar na frente de quem golpeia, a até o alcance
+;      do golpe (tabela alc_golpe: ALC_SOCO, ALC_CHUTE, ALC_GIRO, ALC_INV);
 ;   2) a ponta do golpe (punho ou pé, tabela ponta_golpe, mais a altura do
 ;      pulo de quem golpeia) precisa estar entre o ponto mais baixo e o topo
 ;      do adversário, com folga de TOL_V. Topo: ALT_TOPO_PE em pé, ALT_TOPO_BX
@@ -14,7 +14,10 @@
 ; chão (e só acerta do alto com o chute, perto da cabeça).
 ; Os dois golpes de um tique são testados antes de qualquer dano ser aplicado,
 ; então golpes simultâneos valem para os dois lados (ninguém tem prioridade).
-; Golpe válido: tira 1 de energia, empurra o adversário para trás e o faz piscar.
+; Os especiais seguem as mesmas regras: o chute giratório e o soco da
+; investida passam por cima de quem está abaixado, como o soco reto.
+; Golpe válido: tira 1 de energia, empurra o adversário para trás (EMPURRA, ou
+; EMPURRA_ESP nos especiais) e o faz piscar.
 
 %include "defs.inc"
 
@@ -29,7 +32,9 @@ segment code
 testa_golpe:
 		XOR		AL,AL
 		CMP		BYTE [SI+J_IMPACTO],0		; Nenhum golpe esticado neste tique
-		JE		tg_fim
+		JNE		tg_testa
+		JMP		tg_fim						; (tg_fim é longe demais para um salto curto)
+tg_testa:
 		MOV		BYTE [SI+J_IMPACTO],0
 		PUSH	BX
 		PUSH	CX
@@ -42,15 +47,18 @@ testa_golpe:
 tg_frente:
 		OR		BX,BX
 		JL		tg_volta					; Adversário está atrás: não acerta
-		CMP		BYTE [SI+J_ATQ],ATQ_SOCO	; Alcance: chute e rasteira vão mais longe
-		JNE		tg_alc_chute				; que o soco
-		CMP		BX,ALC_SOCO
+		MOV		CX,BX						; CX = distância
+		MOV		BL,[SI+J_ATQ]				; Alcance do golpe (tabela alc_golpe)
+		XOR		BH,BH
+		MOV		DL,[BX+alc_golpe]
+		XOR		DH,DH
+		CMP		CX,DX
 		JA		tg_volta					; Longe demais
-		JMP		tg_altura
-tg_alc_chute:
-		CMP		BX,ALC_CHUTE
-		JA		tg_volta
 ; Altura: CX = altura da ponta do golpe
+		CMP		BL,ATQ_GIRO					; Especiais: tabela ponta_especial
+		JB		tg_altura
+		MOV		CL,[BX+ponta_especial-ATQ_GIRO]
+		JMP		tg_ponta
 tg_altura:
 		MOV		BL,[SI+J_EST]				; BX = postura*3 + (golpe-1)
 		MOV		BH,BL
@@ -60,6 +68,7 @@ tg_altura:
 		DEC		BL
 		XOR		BH,BH
 		MOV		CL,[BX+ponta_golpe]
+tg_ponta:
 		XOR		CH,CH
 		ADD		CX,[SI+J_Y]					; No ar, soma a altura do pulo
 		MOV		DX,[DI+J_Y]					; DX = ponto mais baixo do adversário
@@ -99,6 +108,10 @@ aplica_golpe:
 		MOV		BYTE [DI+J_PISCA],T_PISCA
 		MOV		BYTE [energia_mudou],1
 		MOV		AX,EMPURRA
+		CMP		BYTE [SI+J_ATQ],ATQ_GIRO	; Especial: empurra bem mais
+		JB		ag_sentido
+		MOV		AX,EMPURRA_ESP
+ag_sentido:
 		TEST	BYTE [SI+J_DIR],80h			; Quem golpeia olha para a esquerda: empurra
 		JZ		ag_empurra					; para a esquerda
 		NEG		AX
@@ -201,3 +214,7 @@ energia_mudou	DB	0						; 1 = a barra de energia precisa ser redesenhada
 ponta_golpe	DB	86, 58, 4					; em pé: reto
 			DB	80, 60, 4					; abaixado: diagonal para cima
 			DB	48, 6, 6					; no ar: diagonal para baixo
+; Especiais (em pé): chute giratório, soco da investida
+ponta_especial DB	84, 86
+; Alcance de cada golpe (índice = J_ATQ)
+alc_golpe	DB	0, ALC_SOCO, ALC_CHUTE, ALC_CHUTE, ALC_GIRO, ALC_INV
