@@ -8,6 +8,9 @@
 # *.OBJ como padrões diferentes, por isso ambos estão listados.
 # ============================================
 
+# --- Referências ---
+SEMB/
+
 # --- Arquivos objeto e intermediários ---
 *.obj
 *.OBJ
@@ -121,3 +124,9 @@ ehthumbs.db
 !*.ASM
 !*.inc
 !*.INC
+
+# --- Necessários para compilação ---
+!MAKE.EXE 
+!CWSDPMI.EXE
+!NASM16.EXE
+!FREELINK.EXE

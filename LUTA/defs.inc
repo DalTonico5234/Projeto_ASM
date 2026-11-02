@@ -56,25 +56,51 @@ X_MAX		equ		605			; maior x do centro de um lutador
 ENERGIA		equ		10			; energia no início de cada round
 TEMPO_ROUND	equ		180			; 3 minutos, em segundos
 VEL			equ		6			; passo horizontal por tique
-PULO_V		equ		15			; velocidade inicial do pulo
-GRAV		equ		2			; quanto a velocidade vertical cai por tique
+PULO_V		equ		27			; velocidade inicial do pulo (sobe até 135 pixels)
+GRAV		equ		3			; quanto a velocidade vertical cai por tique
 DIST_MIN	equ		36			; distância mínima entre os centros dos lutadores
+ALT_CRUZA	equ		92			; diferença de altura para um passar por cima da cabeça do outro
 ALC_SOCO	equ		54			; distância máxima para o soco acertar
 ALC_CHUTE	equ		60			; distância máxima para o chute acertar
-ALT_DESVIO	equ		24			; altura de pulo que faz o chute passar por baixo
+ALT_TOPO_PE	equ		108			; altura do topo da cabeça de um lutador em pé
+ALT_TOPO_BX	equ		73			; altura do topo da cabeça de um lutador abaixado
+ALT_BASE_AR	equ		18			; altura do ponto mais baixo de um lutador no ar (acima do J_Y)
+TOL_V		equ		10			; folga vertical para o golpe pegar o adversário
 T_GOLPE		equ		6			; duração de um soco ou chute, em tiques
-T_IMPACTO	equ		4			; tique do golpe em que o acerto é verificado
+T_IMPACTO	equ		4			; tique do golpe em que o acerto é verificado (no ar,
+										; também nos 2 tiques seguintes)
 EMPURRA		equ		8			; recuo de quem leva um golpe
 T_PISCA		equ		3			; tiques que o lutador atingido fica branco
+JANELA_RAST	equ		3			; abaixar até 3 tiques antes (ou depois) do chute = rasteira
 
 ;------------------------------------------------------------------------------
-; Estados (e poses) do lutador
-E_PARADO	equ		0
-E_ABAIXADO	equ		1
-E_PULO		equ		2
-E_SOCO		equ		3
-E_CHUTE		equ		4
-P_ANDA		equ		5			; só pose: passo da caminhada
+; Postura do lutador (J_EST). O golpe é independente da postura: o lutador
+; pode socar ou chutar em pé, abaixado ou no ar (J_ATQ diz qual golpe está
+; em andamento) e a pose desenhada muda conforme a combinação.
+E_PARADO	equ		0			; em pé, no chão
+E_ABAIXADO	equ		1			; abaixado, no chão
+E_PULO		equ		2			; no ar
+
+; Golpe em andamento (J_ATQ)
+ATQ_NENHUM	equ		0
+ATQ_SOCO	equ		1
+ATQ_CHUTE	equ		2
+ATQ_RASTEIRA	equ		3			; abaixar e chutar juntos, estando em pé
+
+; Poses (índice da tabela "poses" em jogador.asm)
+P_PARADO	equ		0
+P_ABAIXADO	equ		1
+P_PULO		equ		2
+P_SOCO		equ		3			; em pé: soco reto
+P_CHUTE		equ		4			; em pé: chute reto
+P_ANDA		equ		5			; passo da caminhada
+P_SOCO_BX	equ		6			; abaixado: soco na diagonal para cima
+P_CHUTE_BX	equ		7			; abaixado: chute na diagonal para cima
+P_SOCO_AR	equ		8			; no ar: soco na diagonal para baixo
+P_CHUTE_AR	equ		9			; no ar: chute na diagonal para baixo
+P_RASTEIRA	equ		10			; rasteira: perna esticada rente ao chão
+P_ANDA_BX	equ		11			; caminhada abaixado: pernas cruzando
+P_PASSADA_BX	equ		12			; caminhada abaixado: passada larga
 
 ;------------------------------------------------------------------------------
 ; Estrutura de um lutador (deslocamentos dentro de jog1/jog2)
@@ -82,7 +108,7 @@ J_X			equ		0			; dw  x do centro do corpo
 J_Y			equ		2			; dw  altura do pulo (0 = no chão)
 J_VY		equ		4			; dw  velocidade vertical (com sinal)
 J_DIR		equ		6			; db  1 olha para a direita, -1 (0FFh) para a esquerda
-J_EST		equ		7			; db  estado (E_...)
+J_EST		equ		7			; db  postura (E_...)
 J_T			equ		8			; db  tiques restantes do golpe
 J_ENER		equ		9			; db  energia
 J_VIT		equ		10			; db  rounds vencidos
@@ -103,4 +129,8 @@ J_DPOSE		equ		26			; db  pose do desenho que está na tela
 J_DCOR		equ		27			; db  cor do desenho que está na tela
 J_VIS		equ		28			; db  1 se o lutador está desenhado na tela
 J_IMPACTO	equ		29			; db  1 = golpe esticado neste tique, falta conferir o acerto
-J_TAM		equ		30			; tamanho da estrutura
+J_ATQ		equ		30			; db  golpe em andamento (ATQ_...)
+J_TBX		equ		31			; db  tiques com a tecla de abaixar apertada (satura em 255)
+J_DDIR		equ		32			; db  direção do desenho que está na tela
+J_ACERTOU	equ		33			; db  1 = o golpe em andamento já acertou
+J_TAM		equ		34			; tamanho da estrutura

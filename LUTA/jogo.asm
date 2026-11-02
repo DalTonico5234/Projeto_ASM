@@ -113,7 +113,7 @@ de_cor:
 de_lado:
 		PUSH	DX
 		MOV		DX,196						; Figura do lutador
-		MOV		CL,E_PARADO
+		MOV		CL,P_PARADO
 		CALL	desenha_pose				; (deixa [cor] com a cor usada, para os textos)
 		POP		DX
 		MOV		DH,7						; Nome do jogador
@@ -172,7 +172,7 @@ redesenha_selecao:
 		CALL	escreve
 		MOV		BYTE [cor],branco			; Tabela de controles
 		MOV		SI,str_controles
-		MOV		DH,23
+		MOV		DH,22
 rs_controles:
 		MOV		DL,10
 		CALL	escreve						; Coluna do jogador 1
@@ -644,7 +644,7 @@ rg_desenha:
 		MOV		AL,[SI+J_COR]				; Vencedor comemorando com um soco
 		MOV		BX,320
 		MOV		DX,212
-		MOV		CL,E_SOCO
+		MOV		CL,P_SOCO
 		MOV		CH,[SI+J_DIR]
 		CALL	desenha_pose
 		MOV		AL,[vencedor]
@@ -703,6 +703,7 @@ str_controles DB 'A  D   andar',0,		1Bh,'  ',1Ah,'   andar',0
 			DB	'S      abaixar',0,		19h,'      abaixar',0
 			DB	'R      chute',0,		'N      chute',0
 			DB	'T      soco',0,		'M      soco',0
+			DB	'S + R  rasteira',0,	19h,' + N  rasteira',0
 			DB	0FFh
 str_enter	DB	'ENTER  come',87h,'a a luta          Q  sai',0
 str_round	DB	'ROUND 1',0

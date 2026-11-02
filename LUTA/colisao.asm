@@ -1,10 +1,17 @@
 ; colisao.asm - Acerto dos golpes e limites de posição dos lutadores
 ;
-; Regras do acerto (conferidas no tique em que o golpe está esticado):
-;   soco : acerta se a distância entre os lutadores for até ALC_SOCO
-;          e o adversário NÃO estiver abaixado (o soco passa por cima)
-;   chute: acerta se a distância for até ALC_CHUTE e o adversário NÃO
-;          estiver no ar a pelo menos ALT_DESVIO pixels (o chute passa por baixo)
+; Regras do acerto (conferidas no tique em que o golpe está esticado; no ar,
+; em 3 tiques seguidos, valendo um acerto por golpe):
+;   1) o adversário precisa estar na frente de quem golpeia, a até ALC_SOCO
+;      (soco) ou ALC_CHUTE (chute e rasteira);
+;   2) a ponta do golpe (punho ou pé, tabela ponta_golpe, mais a altura do
+;      pulo de quem golpeia) precisa estar entre o ponto mais baixo e o topo
+;      do adversário, com folga de TOL_V. Topo: ALT_TOPO_PE em pé, ALT_TOPO_BX
+;      abaixado; ponto mais baixo: o chão, ou ALT_BASE_AR acima do J_Y no ar.
+; Isso dá as defesas do jogo: o soco reto passa por cima de quem está
+; abaixado, a rasteira e o chute reto passam por baixo de quem pula, e quem
+; passa por cima da cabeça do outro no pulo não é atingido pelos golpes do
+; chão (e só acerta do alto com o chute, perto da cabeça).
 ; Os dois golpes de um tique são testados antes de qualquer dano ser aplicado,
 ; então golpes simultâneos valem para os dois lados (ninguém tem prioridade).
 ; Golpe válido: tira 1 de energia, empurra o adversário para trás e o faz piscar.
@@ -25,27 +32,58 @@ testa_golpe:
 		JE		tg_fim
 		MOV		BYTE [SI+J_IMPACTO],0
 		PUSH	BX
-		MOV		BX,[DI+J_X]					; BX = |x do adversário - x de quem golpeia|
-		SUB		BX,[SI+J_X]
-		JNS		tg_dist_ok
-		NEG		BX
-tg_dist_ok:
-		CMP		BYTE [SI+J_EST],E_CHUTE
-		JE		tg_chute
-; Soco
-		CMP		BX,ALC_SOCO					; Longe demais
-		JA		tg_volta
-		CMP		BYTE [DI+J_EST],E_ABAIXADO	; Defesa: abaixado, o soco passa por cima
-		JE		tg_volta
-		JMP		tg_acertou
-tg_chute:
+		PUSH	CX
+		PUSH	DX
+		MOV		BX,[DI+J_X]					; BX = distância até o adversário, medida
+		SUB		BX,[SI+J_X]					; para a frente de quem golpeia
+		TEST	BYTE [SI+J_DIR],80h
+		JZ		tg_frente
+		NEG		BX							; Olha para a esquerda: a frente é x menor
+tg_frente:
+		OR		BX,BX
+		JL		tg_volta					; Adversário está atrás: não acerta
+		CMP		BYTE [SI+J_ATQ],ATQ_SOCO	; Alcance: chute e rasteira vão mais longe
+		JNE		tg_alc_chute				; que o soco
+		CMP		BX,ALC_SOCO
+		JA		tg_volta					; Longe demais
+		JMP		tg_altura
+tg_alc_chute:
 		CMP		BX,ALC_CHUTE
 		JA		tg_volta
-		CMP		WORD [DI+J_Y],ALT_DESVIO	; Defesa: pulou alto, o chute passa por baixo
-		JGE		tg_volta
-tg_acertou:
+; Altura: CX = altura da ponta do golpe
+tg_altura:
+		MOV		BL,[SI+J_EST]				; BX = postura*3 + (golpe-1)
+		MOV		BH,BL
+		SHL		BL,1
+		ADD		BL,BH
+		ADD		BL,[SI+J_ATQ]
+		DEC		BL
+		XOR		BH,BH
+		MOV		CL,[BX+ponta_golpe]
+		XOR		CH,CH
+		ADD		CX,[SI+J_Y]					; No ar, soma a altura do pulo
+		MOV		DX,[DI+J_Y]					; DX = ponto mais baixo do adversário
+		CMP		BYTE [DI+J_EST],E_PULO
+		JNE		tg_base
+		ADD		DX,ALT_BASE_AR
+tg_base:
+		SUB		DX,TOL_V
+		CMP		CX,DX						; Ponta abaixo do adversário: passa por baixo
+		JL		tg_volta
+		MOV		DX,[DI+J_Y]					; DX = topo do adversário
+		ADD		DX,ALT_TOPO_PE
+		CMP		BYTE [DI+J_EST],E_ABAIXADO
+		JNE		tg_topo
+		SUB		DX,ALT_TOPO_PE-ALT_TOPO_BX
+tg_topo:
+		ADD		DX,TOL_V
+		CMP		CX,DX						; Ponta acima do adversário: passa por cima
+		JG		tg_volta
 		MOV		AL,1
+		MOV		BYTE [SI+J_ACERTOU],1		; Um acerto por golpe
 tg_volta:
+		POP		DX
+		POP		CX
 		POP		BX
 tg_fim:
 		RET
@@ -71,17 +109,41 @@ ag_fim:
 		RET
 
 ;------------------------------------------------------------------------------
-; limita_posicoes: mantém os lutadores dentro da arena e sem passar um pelo
-; outro. O jogador 1 fica sempre à esquerda. Se um anda contra o outro, os
-; dois se empurram (cada um recua metade da sobreposição).
+; limita_posicoes: mantém os lutadores dentro da arena e decide os lados.
+; No chão, um não passa pelo outro: se um anda contra o outro, os dois se
+; empurram (cada um recua metade da sobreposição). Se a diferença de altura
+; for de pelo menos ALT_CRUZA (um pulando por cima do outro), não há distância
+; mínima e eles podem se cruzar. Quando se cruzam, trocam de lado: quem fica à
+; esquerda olha para a direita e o outro para a esquerda, e os golpes passam a
+; sair para o outro lado. Cruzando de novo, voltam ao sentido original.
 limita_posicoes:
 		PUSH	AX
 		PUSH	BX
 		PUSH	CX
 		PUSH	DX
-		MOV		AX,[jog1+J_X]
-		MOV		BX,[jog2+J_X]
+		PUSH	SI
+		PUSH	DI
+		MOV		SI,jog1						; SI = lutador da esquerda, DI = da direita
+		MOV		DI,jog2						; (quem olha para a direita está à esquerda)
+		TEST	BYTE [jog1+J_DIR],80h
+		JZ		lp_lados
+		XCHG	SI,DI
+lp_lados:
+		MOV		AX,[SI+J_X]					; AX = x da esquerda, BX = x da direita
+		MOV		BX,[DI+J_X]
 		CALL	lp_paredes
+		CMP		BX,AX						; Cruzaram: trocam de lado
+		JGE		lp_altura
+		XCHG	SI,DI
+		XCHG	AX,BX
+lp_altura:
+		MOV		CX,[SI+J_Y]					; CX = |diferença de altura|
+		SUB		CX,[DI+J_Y]
+		JNS		lp_alt_ok
+		NEG		CX
+lp_alt_ok:
+		CMP		CX,ALT_CRUZA				; Um passa por cima do outro: sem
+		JGE		lp_grava					; distância mínima
 		MOV		CX,BX						; CX = distância - DIST_MIN
 		SUB		CX,AX
 		SUB		CX,DIST_MIN
@@ -89,23 +151,27 @@ limita_posicoes:
 		NEG		CX							; CX = sobreposição
 		MOV		DX,CX
 		SHR		DX,1
-		SUB		AX,DX						; jogador 1 recua metade
+		SUB		AX,DX						; o da esquerda recua metade
 		SUB		CX,DX
-		ADD		BX,CX						; jogador 2 recua o resto
+		ADD		BX,CX						; o da direita recua o resto
 		CALL	lp_paredes
-		CMP		AX,X_MIN					; Encostado na parede esquerda: o 2 cede
+		CMP		AX,X_MIN					; Encostado na parede esquerda: o outro cede
 		JG		lp_dir
 		MOV		BX,AX
 		ADD		BX,DIST_MIN
 		JMP		lp_grava
 lp_dir:
-		CMP		BX,X_MAX					; Encostado na parede direita: o 1 cede
+		CMP		BX,X_MAX					; Encostado na parede direita: o outro cede
 		JL		lp_grava
 		MOV		AX,BX
 		SUB		AX,DIST_MIN
 lp_grava:
-		MOV		[jog1+J_X],AX
-		MOV		[jog2+J_X],BX
+		MOV		[SI+J_X],AX
+		MOV		[DI+J_X],BX
+		MOV		BYTE [SI+J_DIR],1			; Cada um olha para o adversário
+		MOV		BYTE [DI+J_DIR],-1
+		POP		DI
+		POP		SI
 		POP		DX
 		POP		CX
 		POP		BX
@@ -130,3 +196,8 @@ lpp_4:	RET
 
 segment data
 energia_mudou	DB	0						; 1 = a barra de energia precisa ser redesenhada
+; Altura da ponta de cada golpe (punho ou pé), acima do pé de quem golpeia.
+; Índice = postura*3 + (golpe-1); golpes: soco, chute, rasteira
+ponta_golpe	DB	86, 58, 4					; em pé: reto
+			DB	80, 60, 4					; abaixado: diagonal para cima
+			DB	48, 6, 6					; no ar: diagonal para baixo

@@ -442,6 +442,7 @@ str_tempo	DB	'    0:00    ',0			; 12 caracteres: cobre "MORTE SUBITA" inteira
 str_morte	DB	'MORTE SUBITA',0
 str_dica	DB	'P  pausa        Q  sair',0
 ; Monte (dw x, dw y; termina com x = 0)
-monte		DW	210,ARENA_Y2-110, 300,ARENA_Y2-30, 320,ARENA_Y2-24, 340,ARENA_Y2-30, 430,ARENA_Y2-110, 0,0
+; A base do monte fica acima do ponto mais alto do pulo (os lutadores não o apagam)
+monte		DW	232,ARENA_Y2-90, 300,ARENA_Y2-30, 320,ARENA_Y2-24, 340,ARENA_Y2-30, 408,ARENA_Y2-90, 0,0
 neve		DW	282,ARENA_Y2-46, 300,ARENA_Y2-30, 320,ARENA_Y2-24, 340,ARENA_Y2-30, 358,ARENA_Y2-46
 			DW	346,ARENA_Y2-40, 334,ARENA_Y2-50, 320,ARENA_Y2-38, 306,ARENA_Y2-50, 294,ARENA_Y2-40, 282,ARENA_Y2-46, 0,0
