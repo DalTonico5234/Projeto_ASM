@@ -112,11 +112,11 @@ de_cor:
 		MOV		CH,-1
 de_lado:
 		PUSH	DX
-		MOV		DX,196						; Figura do lutador
+		MOV		DX,240						; Figura do lutador
 		MOV		CL,P_PARADO
 		CALL	desenha_pose				; (deixa [cor] com a cor usada, para os textos)
 		POP		DX
-		MOV		DH,7						; Nome do jogador
+		MOV		DH,5						; Nome do jogador
 		MOV		AX,str_jog1
 		CMP		SI,jog1
 		JE		de_nome
@@ -136,7 +136,7 @@ de_idx:
 		MUL		BL							; AX = índice * 9 (8 letras + 0)
 		ADD		AX,nomes_cores
 		MOV		SI,AX
-		MOV		DH,18
+		MOV		DH,16
 		CALL	escreve
 		POP		SI
 		POP		DX
@@ -150,11 +150,11 @@ redesenha_selecao:
 		PUSH	SI
 		CALL	limpa_tela
 		MOV		BYTE [cor],C_SOL_AMAR
-		MOV		DH,2
+		MOV		DH,1
 		MOV		SI,str_titulo
 		CALL	escreve_centro
 		MOV		BYTE [cor],C_BRANCO
-		MOV		DH,4
+		MOV		DH,3
 		MOV		SI,str_escolha
 		CALL	escreve_centro
 		MOV		DL,1
@@ -163,7 +163,7 @@ redesenha_selecao:
 		MOV		SI,jog2
 		CALL	desenha_escolha
 		MOV		BYTE [cor],C_LILAS			; Como trocar de cor
-		MOV		DH,20
+		MOV		DH,17
 		MOV		DL,13
 		MOV		SI,str_troca1
 		CALL	escreve
@@ -172,7 +172,7 @@ redesenha_selecao:
 		CALL	escreve
 		MOV		BYTE [cor],C_BRANCO			; Tabela de controles
 		MOV		SI,str_controles
-		MOV		DH,21
+		MOV		DH,19
 rs_controles:
 		MOV		DL,10
 		CALL	escreve						; Coluna do jogador 1
@@ -184,7 +184,7 @@ rs_controles:
 		CMP		BYTE [SI],0FFh				; Fim da tabela
 		JNE		rs_controles
 		MOV		BYTE [cor],C_SOL_AMAR
-		MOV		DH,29
+		MOV		DH,28
 		MOV		SI,str_enter
 		CALL	escreve_centro
 		POP		SI

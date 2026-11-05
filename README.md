@@ -28,8 +28,15 @@ c:
 jogar
 ```
 
-Para fazer à mão: `path c:\frasm;z:\`, `cd luta`, `make` e `dojo`. O `make limpa` apaga
-os `.OBJ`, os `.LST` e o executável.
+O `JOGAR.BAT` acha o `FRASM` pela própria pasta, então funciona com a pasta montada em
+qualquer lugar. Se o "Extrair tudo" do Windows criar uma pasta dentro da outra, entre nela
+(`cd`) antes de rodar.
+
+Na velocidade padrão do DOSBox (3000 ciclos), a primeira montagem leva cerca de um minuto e
+meio e os lutadores piscam ao andar. Aperte Ctrl+F12 algumas vezes para aumentar os ciclos.
+
+Para fazer à mão: `cd luta`, `set PATH=%PATH%;..\frasm`, `make` e `dojo`. O `make limpa`
+apaga os `.OBJ`, os `.LST` e o executável.
 
 Para mudar o cenário, rode `python3 LUTA/ferramentas/gera_fundo.py`, que reescreve
 `LUTA/cenario.inc`. O `cenario.inc` já vem pronto, então a montagem não precisa de Python.
@@ -54,7 +61,9 @@ Na seleção, W/S e ↑/↓ trocam a cor e ENTER começa. Na luta, P pausa e Q s
   jogadores, e cada tique (~18,2 por segundo) é um passo do jogo. Os vetores originais
   são restaurados ao sair.
 - **Tela atualizada só no que muda.** A cada tique, cada lutador é apagado da posição
-  antiga e redesenhado na nova; a tela nunca é limpa inteira. Assim a imagem não pisca.
+  antiga e redesenhado na nova; a tela nunca é limpa inteira. Desenhar pixel a pixel pela
+  BIOS ainda é lento a 3000 ciclos: o lutador some em cerca de 1 a cada 4 quadros enquanto
+  anda. Com mais ciclos isso diminui.
 - **Só BIOS, sem escrever na memória de vídeo.** Tudo é desenhado com as rotinas do
   professor. Enquanto o cenário é desenhado, cada pixel também é guardado numa cópia
   em RAM (80 KB, `copia.asm`). Para apagar um lutador, os pixels dele são repintados com
