@@ -181,8 +181,14 @@ lp_dir:
 lp_grava:
 		MOV		[SI+J_X],AX
 		MOV		[DI+J_X],BX
-		MOV		BYTE [SI+J_DIR],1			; Cada um olha para o adversário
+		CMP		BYTE [SI+J_ATQ],ATQ_NENHUM	; Cada um olha para o adversário, mas quem
+		JNE		lp_dir2						; está no meio de um golpe só vira quando
+		MOV		BYTE [SI+J_DIR],1			; ele acaba (a investida não volta para trás)
+lp_dir2:
+		CMP		BYTE [DI+J_ATQ],ATQ_NENHUM
+		JNE		lp_fim
 		MOV		BYTE [DI+J_DIR],-1
+lp_fim:
 		POP		DI
 		POP		SI
 		POP		DX

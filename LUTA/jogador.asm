@@ -260,13 +260,16 @@ vira_rasteira:
 		JNE		vr_fim
 		CMP		BYTE [SI+J_T],T_GOLPE-JANELA_RAST+1
 		JB		vr_fim						; O chute já está adiantado demais
+		CMP		BYTE [SI+J_T],T_IMPACTO+1	; O acerto já foi conferido: chute que
+		JB		vr_fim						; errou não vira outro golpe
 		CMP		BYTE [SI+J_TBX],0			; Tecla de abaixar não está apertada
 		JE		vr_fim
 		CMP		BYTE [SI+J_ACERTOU],0		; O chute já acertou: continua chute
 		JNE		vr_fim
 		MOV		BYTE [SI+J_ATQ],ATQ_RASTEIRA
 		MOV		BYTE [SI+J_EST],E_ABAIXADO
-		MOV		BYTE [SI+J_T],T_GOLPE		; A rasteira começa do início
+		MOV		BYTE [SI+J_T],T_GOLPE+1		; A rasteira começa do início (+1 porque
+											; avanca_golpe desconta um tique logo depois)
 vr_fim:
 		RET
 
@@ -284,15 +287,18 @@ vira_especial:
 ve_golpe:
 		CMP		BYTE [SI+J_T],T_GOLPE-JANELA_ESP+1
 		JB		ve_fim						; O golpe já está adiantado demais
+		CMP		BYTE [SI+J_T],T_IMPACTO+1	; O acerto já foi conferido: golpe que
+		JB		ve_fim						; errou não vira especial
 		CMP		BYTE [SI+J_ACERTOU],0		; O golpe já acertou: continua normal
 		JNE		ve_fim
 		CALL	especial_de
 		CMP		AH,[SI+J_ATQ]				; Não virou especial
 		JE		ve_fim
 		MOV		[SI+J_ATQ],AH
-		MOV		BL,AH						; O especial começa do início
-		XOR		BH,BH
-		MOV		BL,[BX+t_golpe]
+		MOV		BL,AH						; O especial começa do início, com a pose de
+		XOR		BH,BH						; preparação (+1 porque avanca_golpe desconta
+		MOV		BL,[BX+t_golpe]				; um tique logo depois)
+		INC		BL
 		MOV		[SI+J_T],BL
 ve_fim:
 		POP		BX
@@ -885,7 +891,7 @@ p_chute		DB	-6,100, 8
 			DB	0,52,-6,26, -6,26,-8,0			; perna de apoio
 			DB	-4,86,6,78, 6,78,12,88
 			DB	-4,86,-14,74
-p_soco_bx	DB	4,66, 7
+p_soco_bx	DB	4,66, 8
 			DB	0,58,0,30
 			DB	0,30,14,18, 14,18,12,0
 			DB	0,30,-10,16, -10,16,-16,0
