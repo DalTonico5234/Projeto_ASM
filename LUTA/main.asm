@@ -49,5 +49,5 @@ nova_partida:
 segment data
 
 segment stack stack
-		RESB	512
+		RESB	2048
 stacktop:
