@@ -5,7 +5,7 @@ O cenário é "vetorizado" aqui, na hora do projeto: sol (cópia do sol da ref7,
 com degradê em faixas e anel), montanhas low-poly, palmeiras, grade do chão e
 uma Ferrari F40 de perfil viram uma lista de retas (x1,y1,x2,y2,cor). O jogo
 (fundo.asm; os dados entram pelo cenario.asm) só percorre a lista e chama a
-função line do professor para cada reta. Áreas cheias (sol, montanhas, carro)
+função line para cada reta. Áreas cheias (sol, montanhas, carro)
 viram retas horizontais/verticais.
 
 Uso:  python3 gera_fundo.py            -> escreve ../cenario.inc
