@@ -1,6 +1,6 @@
 ; teclado.asm - Tratamento do teclado pela interrupção de hardware INT 9h
 ;
-; Baseado no programa Tecbuf do professor: a rotina de interrupção lê o código
+; Baseado no programa Tecbuf: a rotina de interrupção lê o código
 ; Make/Break na porta 60h e guarda num buffer circular (p_i / p_t). O laço
 ; principal esvazia o buffer com le_teclado, que mantém uma tabela com o estado
 ; de cada tecla (para os dois jogadores segurarem teclas ao mesmo tempo) e uma

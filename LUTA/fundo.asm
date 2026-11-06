@@ -2,7 +2,7 @@
 ;
 ; O cenário (cenario.asm, com as retas de cenario.inc, gerado por
 ; ferramentas/gera_fundo.py) é uma lista de
-; retas desenhadas com a função line do professor. Desenhar tudo leva quase
+; retas desenhadas com a função line. Desenhar tudo leva quase
 ; dois segundos, então isso só é feito uma vez por partida.
 ;
 ; Esta versão não escreve na memória de vídeo: tudo vai para a tela pela BIOS
@@ -13,7 +13,7 @@
 ; o fundo tem ali (lida da cópia).
 ;
 ; Para apagar uma reta sem deixar sobra, os pixels precisam ser exatamente os
-; que a line acendeu: reta_ponto faz a mesma conta da line do professor
+; que a line acendeu: reta_ponto faz a mesma conta da line
 ; (x ou y calculado por divisão arredondada), mas em cada pixel chama ponto,
 ; que grava na cópia (desenho do cenário) ou repinta com a cor do fundo (apagar).
 
@@ -395,7 +395,7 @@ en_fora:
 		RET
 
 ;------------------------------------------------------------------------------
-; reta_ponto: mesma conta da função line do professor (line.asm), mas em vez
+; reta_ponto: mesma conta da função line (line.asm), mas em vez
 ; de plot_xy chama ponto em cada pixel. Assim a cópia guarda e o apagar
 ; repinta exatamente os pixels que a line acende.
 ; PUSH x1; PUSH y1; PUSH x2; PUSH y2; CALL reta_ponto

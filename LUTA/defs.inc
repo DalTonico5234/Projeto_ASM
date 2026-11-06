@@ -4,7 +4,7 @@
 ;------------------------------------------------------------------------------
 ; Paleta retrowave (o modo 12h começa com a paleta padrão; aplica_paleta, em
 ; fundo.asm, troca as 16 cores logo depois de cada troca de modo de vídeo).
-; Tirada das 10 imagens de referência: céu roxo-escuro, neon rosa e azul, sol
+; Inspirada no estilo Retro Wave: céu roxo-escuro, neon rosa e azul, sol
 ; em degradê do amarelo ao magenta. As cores dos lutadores (ciano, verde,
 ; lilás, branco) não aparecem no cenário, para eles se destacarem do fundo.
 C_FUNDO		equ		0			; #1f014b  céu e chão (cor de "apagado")

@@ -1,6 +1,6 @@
 ; grafico.asm - Interface gráfica: tela, textos, arena e placar
 ;
-; Usa as funções gráficas do professor (line, circle, full_circle, cursor,
+; Usa as funções gráficas (line, circle, full_circle, cursor,
 ; caracter, plot_xy) no modo 12h (640x480, 16 cores). Coordenadas no padrão
 ; do plot_xy: x de 0 a 639 e y de 0 a 479, com y = 0 na parte de baixo.
 ; Texto: linha 0-29 (de cima para baixo) e coluna 0-79.

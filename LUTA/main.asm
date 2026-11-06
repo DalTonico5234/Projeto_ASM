@@ -16,7 +16,7 @@
 ;   jogador.asm  lutadores: controles, movimento, poses e desenho
 ;   colisao.asm  acerto dos golpes e limites da arena
 ;   jogo.asm     seleção, rounds, pausa, saída e Game Over
-;   line, circle, fcircle, cursor, caracter, plot_xy: funções gráficas do professor
+;   line, circle, fcircle, cursor, caracter, plot_xy: funções gráficas
 ;   defs.inc     constantes compartilhadas
 ; Montagem: make (veja o Makefile)
 ;
@@ -26,8 +26,8 @@
 ; x1,y1,x2,y2 e cor). O script só é usado quando o cenário é criado ou alterado,
 ; fora do jogo, e o cenario.inc gerado já vem com o projeto, então a montagem
 ; não precisa de Python. Toda a lógica do jogo e todo o desenho na tela são em
-; Assembly: o jogo percorre a tabela e desenha cada reta com a função line do
-; professor (fundo.asm). A tabela é só dado, como as tabelas das poses dos
+; Assembly: o jogo percorre a tabela e desenha cada reta com a função line (fundo.asm). 
+; A tabela é só dado, como as tabelas das poses dos
 ; lutadores em jogador.asm.
 
 extern inicializa, tela_selecao, partida, tela_gameover
